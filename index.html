@@ -1,0 +1,452 @@
+<!DOCTYPE html>
+<html lang="es-PE">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=5">
+<title>Libro de Caja · PCGE</title>
+<meta name="description" content="App contable móvil basada en el PCGE (Perú): Registro, Diario, Balance, Resultados, Situación Financiera y Panel.">
+<meta name="theme-color" content="#0B0F16">
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Libro de Caja">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<!-- ============ CABECERA FIJA ============ -->
+<header class="app-header" id="appHeader">
+  <div class="header-top">
+    <div class="brand">
+      <h1>Libro de Caja<span>PCGE</span></h1>
+    </div>
+    <div class="header-actions">
+      <button class="icon-btn" id="btnTheme" title="Cambiar tema" aria-label="Cambiar tema claro/oscuro">🌙</button>
+      <button class="icon-btn" id="btnMenu" title="Herramientas" aria-label="Abrir herramientas">⋮</button>
+    </div>
+  </div>
+
+  <div class="equation-bar">
+    <span class="equation-label">ACTIVO = PASIVO + PATRIMONIO</span>
+    <span class="equation-value" id="equationValue">S/ 0.00</span>
+  </div>
+
+  <div class="search-bar">
+    <span class="search-icon" aria-hidden="true">🔎</span>
+    <input type="search" id="globalSearch" placeholder="Buscar por código, cuenta u observación…" autocomplete="off" inputmode="search" aria-label="Buscar por código, cuenta u observación">
+    <button class="link-btn" id="btnClearSearch" hidden>Limpiar</button>
+  </div>
+
+  <div class="search-account-preview" id="searchAccountPreview" hidden></div>
+
+  <nav class="tabs" id="tabs" aria-label="Secciones">
+    <button class="tab active" data-tab="registro">➕ <span>Registrar</span></button>
+    <button class="tab" data-tab="diario">📔 <span>Diario</span></button>
+    <button class="tab" data-tab="mayor">📒 <span>Mayor</span></button>
+    <button class="tab" data-tab="plan">📚 <span>Cuentas</span></button>
+    <button class="tab" data-tab="balance">📊 <span>Balance</span></button>
+    <button class="tab" data-tab="resultados">📈 <span>Resultados</span></button>
+    <button class="tab" data-tab="situacion">🥧 <span>Situación</span></button>
+    <button class="tab" data-tab="panel">🧭 <span>Panel</span></button>
+  </nav>
+</header>
+
+<!-- Menú de herramientas (exportar / importar / limpiar) -->
+<div class="menu-backdrop" id="menuBackdrop" hidden>
+  <div class="menu-sheet" id="menuSheet" role="menu">
+    <button class="menu-item" id="btnExport" role="menuitem">⇧ Exportar respaldo (.json)</button>
+    <button class="menu-item" id="btnExportCSV" role="menuitem">⇧ Exportar a CSV / Excel</button>
+    <button class="menu-item" id="btnImportTrigger" role="menuitem">⇩ Importar respaldo (.json o .csv)</button>
+    <input type="file" id="fileImport" accept="application/json,.json,.csv,text/csv" hidden>
+    <button class="menu-item" id="btnClearFilters" role="menuitem">✕ Limpiar filtros</button>
+    <button class="menu-item danger" id="btnResetData" role="menuitem">🗑 Borrar todos los datos</button>
+    <button class="menu-item" id="btnCloseMenu" role="menuitem">Cerrar</button>
+  </div>
+</div>
+
+<!-- Elección al importar un respaldo: combinar con lo que ya hay, o reemplazarlo todo -->
+<div class="menu-backdrop" id="importBackdrop" hidden>
+  <div class="menu-sheet" id="importSheet" role="menu">
+    <p class="import-resumen" id="importResumenTexto"></p>
+    <button class="menu-item" id="btnImportarCombinar" role="menuitem">➕ Combinar con lo que ya tengo</button>
+    <button class="menu-item danger" id="btnImportarReemplazar" role="menuitem">⟲ Reemplazar todo (borra lo actual)</button>
+    <button class="menu-item" id="btnImportarCancelar" role="menuitem">Cancelar</button>
+  </div>
+</div>
+
+<main id="mainContent">
+
+  <!-- ============ TAB: REGISTRO ============ -->
+  <section class="tab-panel active" id="panel-registro" data-panel="registro">
+    <div class="card">
+      <h2 id="formTitle">Nuevo asiento</h2>
+      <p class="edit-banner" id="editBanner" hidden>
+        Editando el asiento N° <b id="editBannerNum"></b>
+        <button type="button" class="link-btn" id="btnCancelEdit">Cancelar</button>
+      </p>
+      <form id="formRegistro" novalidate>
+
+        <div class="field">
+          <label for="inpFecha">Fecha</label>
+          <input type="date" id="inpFecha">
+        </div>
+
+        <div class="field">
+          <label for="inpObs">Glosa (observación del asiento)</label>
+          <textarea id="inpObs" rows="2" placeholder="Ej. Compra de mercadería con IGV"></textarea>
+        </div>
+
+        <div class="field">
+          <label>Líneas del asiento</label>
+          <div id="filasAsiento" class="filas-asiento"></div>
+          <button type="button" class="btn-add-linea" id="btnAgregarLinea">+ Agregar línea</button>
+        </div>
+
+        <div class="asiento-preview" id="asientoPreview"></div>
+
+        <p class="form-status" id="formStatus">Complete los datos y presione Registrar.</p>
+
+        <button type="submit" class="btn-primary" id="btnRegistrar" disabled>▶ Registrar asiento</button>
+      </form>
+    </div>
+
+    <div class="card">
+      <h2>Respaldo de tus datos</h2>
+      <p class="muted">Tus registros viven solo en este celular. Si vas a cambiar de equipo o formatearlo, exporta un respaldo primero.</p>
+      <button class="btn-secondary" id="btnExport2">⇧ Exportar respaldo (.json)</button>
+      <button class="btn-secondary" id="btnExportCSV2">⇧ Exportar a CSV / Excel</button>
+      <button class="btn-secondary" id="btnImportTrigger2">⇩ Importar respaldo (.json o .csv)</button>
+    </div>
+  </section>
+
+  <!-- ============ TAB: DIARIO ============ -->
+  <section class="tab-panel" id="panel-diario" data-panel="diario">
+    <div class="card table-card" id="printDiario">
+      <div class="card-head">
+        <h2>Libro Diario</h2>
+        <div class="card-head-actions">
+          <button class="icon-btn-outline" id="btnPrintDiario" title="Imprimir / exportar a PDF">🖨</button>
+          <span class="badge" id="badgeDiarioCount">0 líneas</span>
+        </div>
+      </div>
+      <div class="table-scroll">
+        <table class="data-table" id="tableDiario">
+          <thead>
+            <tr>
+              <th data-sort="fecha">Fecha <i></i></th>
+              <th data-sort="numero">N° <i></i></th>
+              <th data-sort="codigo">Código <i></i></th>
+              <th data-sort="nombre">Denominación <i></i></th>
+              <th data-sort="glosa">Observación <i></i></th>
+              <th data-sort="debe" class="num">Debe <i></i></th>
+              <th data-sort="haber" class="num">Haber <i></i></th>
+              <th>Acciones</th>
+            </tr>
+          </thead>
+          <tbody id="bodyDiario"></tbody>
+        </table>
+      </div>
+      <div class="empty-state" id="emptyDiario" hidden>
+        <p>Todavía no hay asientos registrados.<br>Registre su primera operación para comenzar.</p>
+        <button type="button" class="btn-ir-registrar">+ Registrar operación</button>
+      </div>
+      <div class="pagination" id="pagDiario"></div>
+    </div>
+  </section>
+
+  <!-- ============ TAB: LIBRO MAYOR ============ -->
+  <section class="tab-panel" id="panel-mayor" data-panel="mayor">
+    <div class="card" id="printMayor">
+      <div class="card-head">
+        <h2>Libro Mayor</h2>
+        <button class="icon-btn-outline" id="btnPrintMayor" title="Imprimir / exportar a PDF" aria-label="Imprimir Libro Mayor">🖨</button>
+      </div>
+
+      <div class="field">
+        <label for="inpMayorCuenta">Cuenta</label>
+        <div class="autocomplete">
+          <input type="text" id="inpMayorCuenta" placeholder="Busca por código o nombre (ej. caja, 101)" autocomplete="off">
+          <ul class="autocomplete-list" id="listMayorCuenta" hidden></ul>
+        </div>
+        <p class="hint" id="hintMayorCuenta"></p>
+      </div>
+
+      <div class="period-selector" id="mayorPeriodo" role="group" aria-label="Rango de fechas del Libro Mayor">
+        <button type="button" class="period-btn" data-rango="hoy">Hoy</button>
+        <button type="button" class="period-btn active" data-rango="todo">Todo</button>
+        <button type="button" class="period-btn" data-rango="mes">Este mes</button>
+        <button type="button" class="period-btn" data-rango="anio">Este año</button>
+        <button type="button" class="period-btn" data-rango="personalizado">Personalizado</button>
+      </div>
+      <div class="mayor-fechas" id="mayorFechas" hidden>
+        <div class="field"><label for="mayorDesde">Desde</label><input type="date" id="mayorDesde"></div>
+        <div class="field"><label for="mayorHasta">Hasta</label><input type="date" id="mayorHasta"></div>
+      </div>
+
+      <div class="kpi-row" id="mayorResumen" hidden>
+        <div class="kpi"><span>Saldo inicial</span><strong id="mayorSaldoInicial">S/ 0.00</strong></div>
+        <div class="kpi kpi-highlight"><span>Saldo final</span><strong id="mayorSaldoFinal">S/ 0.00</strong></div>
+      </div>
+
+      <div class="table-scroll">
+        <table class="data-table" id="tableMayor" hidden>
+          <thead>
+            <tr><th>Fecha</th><th>N°</th><th>Glosa</th><th class="num">Debe</th><th class="num">Haber</th><th class="num">Saldo</th></tr>
+          </thead>
+          <tbody id="bodyMayor"></tbody>
+          <tfoot id="footMayor"></tfoot>
+        </table>
+      </div>
+      <p class="empty-state" id="emptyMayor">Elija una cuenta arriba para ver su Libro Mayor.</p>
+    </div>
+  </section>
+
+  <!-- ============ TAB: PLAN DE CUENTAS ============ -->
+  <section class="tab-panel" id="panel-plan" data-panel="plan">
+    <div class="card">
+      <div class="card-head">
+        <h2>Plan de Cuentas</h2>
+        <span class="badge" id="badgePlanCount">0 cuentas</span>
+      </div>
+      <p class="plan-search-hint">Use el buscador de arriba para filtrar por código o nombre. Toque un elemento para ver sus cuentas; el saldo mostrado es el acumulado de todo lo registrado.</p>
+      <div id="planTree"></div>
+      <p class="empty-state" id="emptyPlan" hidden>No se encontraron cuentas con ese criterio.</p>
+    </div>
+  </section>
+
+  <!-- ============ TAB: BALANCE ============ -->
+  <section class="tab-panel" id="panel-balance" data-panel="balance">
+    <div class="card table-card" id="printBalance">
+      <div class="card-head">
+        <h2>Balance de Comprobación</h2>
+        <div class="card-head-actions">
+          <button class="icon-btn-outline" id="btnPrintBalance" title="Imprimir / exportar a PDF">🖨</button>
+          <span class="badge" id="badgeBalanceOk">Cuadra</span>
+        </div>
+      </div>
+      <div class="period-selector" id="balancePeriodo" role="group" aria-label="Fecha del Balance">
+        <button type="button" class="period-btn" data-rango="hoy">Hoy</button>
+        <button type="button" class="period-btn active" data-rango="todo">Todo</button>
+        <button type="button" class="period-btn" data-rango="mes">Este mes</button>
+        <button type="button" class="period-btn" data-rango="anio">Este año</button>
+        <button type="button" class="period-btn" data-rango="personalizado">Personalizado</button>
+      </div>
+      <div class="mayor-fechas" id="balanceFechas" hidden>
+        <div class="field"><label for="balanceDesde">Desde</label><input type="date" id="balanceDesde"></div>
+        <div class="field"><label for="balanceHasta">Hasta</label><input type="date" id="balanceHasta"></div>
+      </div>
+      <p class="plan-search-hint">Muestra los movimientos acumulados hasta la fecha "Hasta" (como una foto a esa fecha).</p>
+      <div class="table-scroll">
+        <table class="data-table" id="tableBalance">
+          <thead>
+            <tr>
+              <th data-sort="codigo">Código <i></i></th>
+              <th data-sort="nombre">Denominación <i></i></th>
+              <th data-sort="debe" class="num">Debe <i></i></th>
+              <th data-sort="haber" class="num">Haber <i></i></th>
+              <th data-sort="deudor" class="num">S. Deudor <i></i></th>
+              <th data-sort="acreedor" class="num">S. Acreedor <i></i></th>
+            </tr>
+          </thead>
+          <tbody id="bodyBalance"></tbody>
+          <tfoot id="footBalance"></tfoot>
+        </table>
+      </div>
+      <div class="empty-state" id="emptyBalance" hidden>
+        <p>No hay movimientos registrados todavía.</p>
+        <button type="button" class="btn-ir-registrar">+ Registrar operación</button>
+      </div>
+      <div class="pagination" id="pagBalance"></div>
+    </div>
+  </section>
+
+  <!-- ============ TAB: RESULTADOS ============ -->
+  <section class="tab-panel" id="panel-resultados" data-panel="resultados">
+    <div class="card" id="printResultados">
+      <div class="card-head">
+        <h2>Estado de Resultados</h2>
+        <button class="icon-btn-outline" id="btnPrintResultados" title="Imprimir / exportar a PDF">🖨</button>
+      </div>
+      <div class="period-selector" id="resultadosPeriodo" role="group" aria-label="Periodo del Estado de Resultados">
+        <button type="button" class="period-btn" data-rango="hoy">Hoy</button>
+        <button type="button" class="period-btn active" data-rango="todo">Todo</button>
+        <button type="button" class="period-btn" data-rango="mes">Este mes</button>
+        <button type="button" class="period-btn" data-rango="anio">Este año</button>
+        <button type="button" class="period-btn" data-rango="personalizado">Personalizado</button>
+      </div>
+      <div class="mayor-fechas" id="resultadosFechas" hidden>
+        <div class="field"><label for="resultadosDesde">Desde</label><input type="date" id="resultadosDesde"></div>
+        <div class="field"><label for="resultadosHasta">Hasta</label><input type="date" id="resultadosHasta"></div>
+      </div>
+      <p class="plan-search-hint">Solo lo que se movió dentro del rango elegido (es un reporte de flujo, no una foto).</p>
+      <div class="kpi-row">
+        <div class="kpi"><span>Ingresos</span><strong id="kpiIngresos">S/ 0.00</strong></div>
+        <div class="kpi"><span>Gastos</span><strong id="kpiGastos">S/ 0.00</strong></div>
+        <div class="kpi kpi-highlight" id="kpiNetoBox"><span>Resultado neto</span><strong id="kpiNeto">S/ 0.00</strong></div>
+      </div>
+      <h3 class="subtitle">Ingresos por cuenta (elemento 7)</h3>
+      <div class="table-scroll">
+        <table class="data-table" id="tableIngresos">
+          <thead><tr><th>Código</th><th>Denominación</th><th class="num">Monto</th></tr></thead>
+          <tbody id="bodyIngresos"></tbody>
+        </table>
+      </div>
+      <p class="empty-state" id="emptyIngresos" hidden>Sin ingresos registrados.</p>
+      <h3 class="subtitle">Gastos por cuenta (elemento 6)</h3>
+      <div class="table-scroll">
+        <table class="data-table" id="tableGastos">
+          <thead><tr><th>Código</th><th>Denominación</th><th class="num">Monto</th></tr></thead>
+          <tbody id="bodyGastos"></tbody>
+        </table>
+      </div>
+      <p class="empty-state" id="emptyGastos" hidden>Sin gastos registrados.</p>
+    </div>
+  </section>
+
+  <!-- ============ TAB: SITUACIÓN ============ -->
+  <section class="tab-panel" id="panel-situacion" data-panel="situacion">
+    <div class="card" id="printSituacion">
+      <div class="card-head">
+        <h2>Estado de Situación Financiera</h2>
+        <button class="icon-btn-outline" id="btnPrintSituacion" title="Imprimir / exportar a PDF">🖨</button>
+      </div>
+      <div class="period-selector" id="situacionPeriodo" role="group" aria-label="Fecha del Estado de Situación">
+        <button type="button" class="period-btn" data-rango="hoy">Hoy</button>
+        <button type="button" class="period-btn active" data-rango="todo">Todo</button>
+        <button type="button" class="period-btn" data-rango="mes">Este mes</button>
+        <button type="button" class="period-btn" data-rango="anio">Este año</button>
+        <button type="button" class="period-btn" data-rango="personalizado">Personalizado</button>
+      </div>
+      <div class="mayor-fechas" id="situacionFechas" hidden>
+        <div class="field"><label for="situacionDesde">Desde</label><input type="date" id="situacionDesde"></div>
+        <div class="field"><label for="situacionHasta">Hasta</label><input type="date" id="situacionHasta"></div>
+      </div>
+      <p class="plan-search-hint">Muestra los saldos acumulados hasta la fecha "Hasta" (como una foto a esa fecha).</p>
+      <div class="kpi-row">
+        <div class="kpi"><span>Activo</span><strong id="kpiActivo">S/ 0.00</strong></div>
+        <div class="kpi"><span>Pasivo + Patrimonio</span><strong id="kpiPasPat">S/ 0.00</strong></div>
+      </div>
+      <p class="form-status" id="situacionStatus">Cuadra: Activo = Pasivo + Patrimonio</p>
+
+      <h3 class="subtitle">Activo (elementos 1, 2 y 3)</h3>
+      <div class="table-scroll">
+        <table class="data-table" id="tableActivo">
+          <thead><tr><th>Código</th><th>Denominación</th><th class="num">Saldo</th></tr></thead>
+          <tbody id="bodyActivo"></tbody>
+        </table>
+      </div>
+      <p class="empty-state" id="emptyActivo" hidden>Sin cuentas de activo con saldo.</p>
+
+      <h3 class="subtitle">Pasivo (elemento 4)</h3>
+      <div class="table-scroll">
+        <table class="data-table" id="tablePasivo">
+          <thead><tr><th>Código</th><th>Denominación</th><th class="num">Saldo</th></tr></thead>
+          <tbody id="bodyPasivo"></tbody>
+        </table>
+      </div>
+      <p class="empty-state" id="emptyPasivo" hidden>Sin cuentas de pasivo con saldo.</p>
+
+      <h3 class="subtitle">Patrimonio (elemento 5 + resultado del ejercicio)</h3>
+      <div class="table-scroll">
+        <table class="data-table" id="tablePatrimonio">
+          <thead><tr><th>Código</th><th>Denominación</th><th class="num">Saldo</th></tr></thead>
+          <tbody id="bodyPatrimonio"></tbody>
+        </table>
+      </div>
+      <p class="empty-state" id="emptyPatrimonio" hidden>Sin cuentas de patrimonio con saldo.</p>
+    </div>
+  </section>
+
+  <!-- ============ TAB: PANEL ============ -->
+  <section class="tab-panel" id="panel-panel" data-panel="panel">
+    <div class="card" id="printPanel">
+      <div class="card-head">
+        <h2>Panel</h2>
+        <div class="card-head-actions">
+          <button class="icon-btn-outline" id="btnPrintPanel" title="Imprimir / exportar a PDF" aria-label="Imprimir Panel">🖨</button>
+          <span class="badge" id="badgePanelCuadre">Cuadra</span>
+        </div>
+      </div>
+
+      <div class="period-selector" id="panelPeriodo" role="group" aria-label="Rango de fechas del panel">
+        <button type="button" class="period-btn" data-rango="hoy">Hoy</button>
+        <button type="button" class="period-btn active" data-rango="todo">Todo</button>
+        <button type="button" class="period-btn" data-rango="mes">Este mes</button>
+        <button type="button" class="period-btn" data-rango="anio">Este año</button>
+        <button type="button" class="period-btn" data-rango="personalizado">Personalizado</button>
+      </div>
+      <div class="mayor-fechas" id="panelFechas" hidden>
+        <div class="field"><label for="panelDesde">Desde</label><input type="date" id="panelDesde"></div>
+        <div class="field"><label for="panelHasta">Hasta</label><input type="date" id="panelHasta"></div>
+      </div>
+      <p class="plan-search-hint">Caja y Bancos, Cuentas por cobrar/pagar y los totales de Activo/Pasivo/Patrimonio se muestran "a la fecha Hasta" (como una foto). Ingresos, Gastos y Resultado del periodo son lo movido solo dentro del rango elegido.</p>
+
+      <div class="kpi-grid">
+        <div class="kpi"><span>Caja y Bancos</span><strong id="pnlCajaBancos">S/ 0.00</strong></div>
+        <div class="kpi"><span>Cuentas por cobrar</span><strong id="pnlPorCobrar">S/ 0.00</strong></div>
+        <div class="kpi"><span>Cuentas por pagar</span><strong id="pnlPorPagar">S/ 0.00</strong></div>
+        <div class="kpi"><span>Total activo</span><strong id="pnlActivo">S/ 0.00</strong></div>
+        <div class="kpi"><span>Total pasivo</span><strong id="pnlPasivo">S/ 0.00</strong></div>
+        <div class="kpi"><span>Total patrimonio</span><strong id="pnlPatrimonio">S/ 0.00</strong></div>
+        <div class="kpi"><span>Ingresos del periodo</span><strong id="pnlIngresos">S/ 0.00</strong></div>
+        <div class="kpi"><span>Gastos del periodo</span><strong id="pnlGastos">S/ 0.00</strong></div>
+        <div class="kpi kpi-highlight"><span>Resultado del periodo</span><strong id="pnlNeto">S/ 0.00</strong></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3 class="subtitle">Ingresos vs gastos por mes</h3>
+      <div class="period-selector" id="periodSelector" role="group" aria-label="Periodo del gráfico">
+        <button type="button" class="period-btn active" data-period="mes">Mes</button>
+        <button type="button" class="period-btn" data-period="trimestre">Trimestre</button>
+        <button type="button" class="period-btn" data-period="anio">Año</button>
+      </div>
+      <canvas id="chartIngGas" width="640" height="280" role="img" aria-label="Gráfico de ingresos y gastos por periodo"></canvas>
+      <div class="legend" id="legendIngGas"></div>
+    </div>
+
+    <div class="card">
+      <h3 class="subtitle">Resultado del mes</h3>
+      <canvas id="chartResultado" width="640" height="240" role="img" aria-label="Gráfico de resultado mensual"></canvas>
+    </div>
+
+    <div class="card">
+      <h3 class="subtitle">Saldo de Caja y Bancos a fin de mes</h3>
+      <canvas id="chartCaja" width="640" height="240" role="img" aria-label="Gráfico de saldo de caja y bancos"></canvas>
+    </div>
+
+    <div class="card">
+      <h3 class="subtitle">En qué se va la plata (top 5 gastos)</h3>
+      <canvas id="chartTop5" width="640" height="260" role="img" aria-label="Gráfico de los cinco principales gastos"></canvas>
+    </div>
+
+    <div class="card">
+      <h3 class="subtitle">Control del Libro Diario</h3>
+      <div class="kpi-grid">
+        <div class="kpi"><span>Asientos registrados</span><strong id="pnlAsientos">0</strong></div>
+        <div class="kpi"><span>Líneas registradas</span><strong id="pnlLineas">0</strong></div>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<!-- ============ TOASTS ============ -->
+<div class="toast-container" id="toastContainer" aria-live="polite"></div>
+
+<script src="app.js" defer></script>
+<script>
+  // Registro del Service Worker en un <script> propio (no dentro de app.js) para que
+  // los analizadores de PWA (PWABuilder, Lighthouse) lo detecten de forma confiable.
+  window.__swRegistro = null;
+  if ('serviceWorker' in navigator) {
+    window.__swRegistro = navigator.serviceWorker.register('sw.js').catch(function (err) {
+      console.error('No se pudo registrar el Service Worker:', err);
+      return null;
+    });
+  }
+</script>
+</body>
+</html>
